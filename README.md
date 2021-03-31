@@ -6,7 +6,7 @@ This repo contains the Dataable's report appropriate for the Board of Directors 
 * [Preparation Stage](#Preparation-Stage)
 * [Data wrangling](#Data-wrangling)
 * [Statistical Methods](#Statistical-Methods)
-* [Analytical-Conclusions](#Analytical-Conclusions)
+* [Analytical Conclusions](#Analytical-Conclusions)
 
 ## Preparation Stage
 
@@ -14,4 +14,4 @@ This repo contains the Dataable's report appropriate for the Board of Directors 
 
 ## Statistical Method
 
-## Analytical Mthod
+## Analytical Conclusions
