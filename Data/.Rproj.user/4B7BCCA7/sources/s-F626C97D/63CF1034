@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1616130947631.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "63CF1034",
+    "lastKnownWriteTime" : 1616131066,
+    "last_content_update" : 1616131066893,
+    "path" : "~/Documents/GitHub/sta303project/inst/rmarkdown/templates/consulting-report/skeleton/skeleton.Rmd",
+    "project_path" : "inst/rmarkdown/templates/consulting-report/skeleton/skeleton.Rmd",
+    "properties" : {
+        "cursorPosition" : "68,81",
+        "scrollLine" : "57"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

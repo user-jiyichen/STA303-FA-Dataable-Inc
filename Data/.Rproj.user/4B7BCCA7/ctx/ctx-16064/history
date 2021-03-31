@@ -1,0 +1,15 @@
+library(sta303project)
+# read in the data
+black_saber_current_employees <- read_csv("data/black-saber-current-employees.csv")
+library(tidyverse)
+# read in the data
+black_saber_current_employees <- read_csv("data/black-saber-current-employees.csv")
+# create a visualisation
+my_plot <- black_saber_current_employees %>%
+ggplot(aes(x = productivity)) +
+geom_histogram(colour = "grey", fill = "#6C3082") +
+theme_minimal() +
+labs(title = "Look! A title. But do you want a title or a caption for your report?", x = "This is a changed x label")
+# save your plot in your images folder, you can specify the height and width, too
+# saving this means you can add the image to your exectuve summary without having to run or rerun the code, if you wish
+ggsave("images/example.png", width = 7, height = 4)

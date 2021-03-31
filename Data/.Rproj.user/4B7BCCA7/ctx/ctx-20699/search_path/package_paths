@@ -1,0 +1,8 @@
+datasets="/Library/Frameworks/R.framework/Versions/3.6/Resources/library/datasets"
+grDevices="/Library/Frameworks/R.framework/Versions/3.6/Resources/library/grDevices"
+graphics="/Library/Frameworks/R.framework/Versions/3.6/Resources/library/graphics"
+methods="/Library/Frameworks/R.framework/Versions/3.6/Resources/library/methods"
+readr="/Library/Frameworks/R.framework/Versions/3.6/Resources/library/readr"
+sta303project="/Users/lizabolton/Documents/GitHub/sta303project"
+stats="/Library/Frameworks/R.framework/Versions/3.6/Resources/library/stats"
+utils="/Library/Frameworks/R.framework/Versions/3.6/Resources/library/utils"

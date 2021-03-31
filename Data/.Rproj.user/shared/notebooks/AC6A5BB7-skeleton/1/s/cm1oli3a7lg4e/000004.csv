@@ -1,0 +1,17 @@
+"0","# read in the data
+black_saber_current_employees <- read_csv(""data/black-saber-current-employees.csv"")
+"
+"2","
+[36m──[39m [1m[1mColumn specification[1m[22m [36m────────────────────────────────────────[39m
+cols(
+  employee_id = [32mcol_double()[39m,
+  gender = [31mcol_character()[39m,
+  team = [31mcol_character()[39m,
+  financial_q = [31mcol_character()[39m,
+  role_seniority = [31mcol_character()[39m,
+  leadership_for_level = [31mcol_character()[39m,
+  productivity = [32mcol_double()[39m,
+  salary = [31mcol_character()[39m
+)
+
+"
