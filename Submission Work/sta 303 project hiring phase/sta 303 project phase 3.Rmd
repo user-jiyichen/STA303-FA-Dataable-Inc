@@ -1,0 +1,44 @@
+---
+title: "sta 303 project phase 3"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## R Markdown
+
+## R Markdown
+```{r}
+phase2 <- read_csv('data/phase2-new-grad-applicants-2020.csv')
+phase3 <- read_csv('data/phase3-new-grad-applicants-2020.csv')
+phase4 <- read_csv('data/final-hires-newgrad_2020.csv')
+```
+
+```{r}
+hiring_table_3 <- phase4 %>%
+  mutate(promotion = 1)
+hiring_table_3 <- phase3 %>%
+  left_join(hiring_table_3)
+hiring_table_3 <- phase2 %>%
+  right_join(hiring_table_3)
+hiring_table_3 <- hiring_table_3 %>%
+  mutate_if(is.numeric, 
+  replace_na, replace = 0) 
+hiring_table_3 <- hiring_table_3 %>%
+  mutate(interviewer_rating = ((interviewer_rating_1+interviewer_rating_2)/2))
+rate_table_3 <- table(data.frame('gender' = hiring_table_3$gender,
+                          'promotion' = hiring_table_3$promotion
+                          ))
+rate_table_3 <- prop.table(rate_table_3, margin = 1)
+rate_table_3
+```
+
+```{r}
+model_3a <- glm(promotion ~ interviewer_rating_1  + gender, family=binomial(link = 'logit'), data = hiring_table_3)
+model_3b <- glm(promotion ~ interviewer_rating_2  + gender, family=binomial(link = 'logit'), data = hiring_table_3)
+summary(model_3a)
+summary(model_3b)
+```

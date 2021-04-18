@@ -1,0 +1,35 @@
+---
+title: "sta 303 whole phase"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## R Markdown
+
+```{r}
+phase1 <- read_csv('data/phase1-new-grad-applicants-2020.csv')
+phase2 <- read_csv('data/phase2-new-grad-applicants-2020.csv')
+phase3 <- read_csv('data/phase3-new-grad-applicants-2020.csv')
+phase4 <- read_csv('data/final-hires-newgrad_2020.csv')
+```
+
+```{r}
+hiring_table_whole <- phase4 %>%
+  mutate(promotion = 1)
+hiring_table_whole <- phase1 %>%
+  left_join(hiring_table_whole)
+hiring_table_whole <- hiring_table_whole %>%
+  mutate_if(is.numeric, 
+  replace_na, replace = 0) %>%
+  filter(cv == 1, cover_letter == 1)
+rate_table_whole <- table(data.frame('gender' = hiring_table_whole$gender,
+                          'promotion' = hiring_table_whole$promotion
+                          ))
+rate_table_whole <- prop.table(rate_table_whole, margin = 1)
+rate_table_whole1 <- 
+```
+
