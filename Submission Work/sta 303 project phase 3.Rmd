@@ -1,0 +1,62 @@
+---
+title: "sta 303 project phase 3"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## R Markdown
+
+## R Markdown
+```{r}
+phase2 <- read_csv('data/phase2-new-grad-applicants-2020.csv')
+phase3 <- read_csv('data/phase3-new-grad-applicants-2020.csv')
+phase4 <- read_csv('data/final-hires-newgrad_2020.csv')
+```
+
+```{r}
+hiring_table_3 <- phase4 %>%
+  mutate(promotion = 1)
+hiring_table_3 <- phase3 %>%
+  left_join(hiring_table_3)
+hiring_table_3 <- phase2 %>%
+  right_join(hiring_table_3)
+hiring_table_3 <- hiring_table_3 %>%
+  mutate_if(is.numeric, 
+  replace_na, replace = 0) 
+hiring_table_3 <- hiring_table_3 %>%
+  mutate(interviewer_rating = ((interviewer_rating_1+interviewer_rating_2)/2))
+hiring_table_3d <- hiring_table_3 %>%
+  filter(team_applied_for == 'Data')
+hiring_table_3s <- hiring_table_3 %>%
+  filter(team_applied_for == 'Software')
+rate_table_3 <- table(data.frame('gender' = hiring_table_3$gender,
+                          'promotion' = hiring_table_3$promotion
+                          ))
+rate_table_3d <- table(data.frame('gender' = hiring_table_3d$gender,
+                          'promotion' = hiring_table_3d$promotion
+                          ))
+rate_table_3s <- table(data.frame('gender' = hiring_table_3s$gender,
+                          'promotion' = hiring_table_3s$promotion
+                          ))
+rate_table_3 <- prop.table(rate_table_3, margin = 1)
+rate_table_3d <- prop.table(rate_table_3d, margin = 1)
+rate_table_3s <- prop.table(rate_table_3s, margin = 1)
+rate_table_3
+rate_table_3d
+rate_table_3s
+```
+
+```{r}
+model_3a <- glm(promotion ~ interviewer_rating_1  + gender, family=binomial(link = 'logit'), data = hiring_table_3)
+model_3b <- glm(promotion ~ interviewer_rating_2  + gender, family=binomial(link = 'logit'), data = hiring_table_3)
+model_3d <- glm(promotion ~ interviewer_rating_1  + gender, family=binomial(link = 'logit'), data = hiring_table_3d)
+model_3s <- glm(promotion ~ interviewer_rating_1  + gender, family=binomial(link = 'logit'), data = hiring_table_3s)
+summary(model_3a)
+summary(model_3b)
+summary(model_3d)
+summary(model_3s)
+```

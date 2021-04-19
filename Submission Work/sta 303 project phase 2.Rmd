@@ -1,0 +1,54 @@
+---
+title: "sta 303 project phase 2"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## R Markdown
+```{r}
+phase2 <- read_csv('data/phase2-new-grad-applicants-2020.csv')
+phase3 <- read_csv('data/phase3-new-grad-applicants-2020.csv')
+```
+
+```{r}
+hiring_table_2 <- phase3 %>%
+  mutate(promotion = 1)
+hiring_table_2 <- phase2 %>%
+  left_join(hiring_table_2)
+hiring_table_2 <- hiring_table_2 %>%
+  mutate_if(is.numeric, 
+  replace_na, replace = 0) 
+hiring_table_2d <- hiring_table_2 %>%
+  filter(team_applied_for == 'Data')
+hiring_table_2s <- hiring_table_2 %>%
+  filter(team_applied_for == 'Software')
+rate_table_2 <- table(data.frame('gender' = hiring_table_2$gender,
+                          'promotion' = hiring_table_2$promotion
+                          ))
+rate_table_2d <- table(data.frame('gender' = hiring_table_2d$gender,
+                          'promotion' = hiring_table_2d$promotion
+                          ))
+rate_table_2s <- table(data.frame('gender' = hiring_table_2s$gender,
+                          'promotion' = hiring_table_2s$promotion
+                          ))
+rate_table_2 <- prop.table(rate_table_2, margin = 1)
+rate_table_2d <- prop.table(rate_table_2d, margin = 1)
+rate_table_2s <- prop.table(rate_table_2s, margin = 1)
+rate_table_2
+rate_table_2d
+rate_table_2s
+```
+
+```{r}
+model_2 <- glm(promotion ~ technical_skills+ writing_skills + leadership_presence + speaking_skills + gender, family=binomial(link = 'logit'), data = hiring_table_2)
+model_2d <- glm(promotion ~ technical_skills+ writing_skills + leadership_presence + speaking_skills + gender, family=binomial(link = 'logit'), data = hiring_table_2d)
+model_2s <- glm(promotion ~ technical_skills+ writing_skills + leadership_presence + speaking_skills + gender, family=binomial(link = 'logit'), data = hiring_table_2s)
+summary(model_2)
+summary(model_2d)
+summary(model_2s)
+```
+

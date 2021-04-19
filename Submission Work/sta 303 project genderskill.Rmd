@@ -1,0 +1,45 @@
+---
+title: "sta 303 project genderskill"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## R Markdown
+
+```{r}
+phase1 <- read_csv('data/phase1-new-grad-applicants-2020.csv')
+phase2 <- read_csv('data/phase2-new-grad-applicants-2020.csv')
+phase3 <- read_csv('data/phase3-new-grad-applicants-2020.csv')
+phase4 <- read_csv('data/final-hires-newgrad_2020.csv')
+```
+
+```{r}
+hiring_table_gl <- hiring_table_2
+hiring_table_gl <- hiring_table_gl %>%
+  group_by(gender) %>%
+  summarise(round(mean(leadership_presence),3))
+hiring_table_gs <- hiring_table_2
+hiring_table_gs <- hiring_table_gs %>%
+  group_by(gender) %>%
+  summarise(round(mean(speaking_skills),3))
+hiring_table_gs <- hiring_table_gs %>%
+  group_by(gender) %>%
+  summarise(round(mean(speaking_skills),3))
+hiring_table_gi1 <- hiring_table_3
+hiring_table_gi1 <- hiring_table_gi1 %>%
+  group_by(gender) %>%
+  summarise(round(mean(interviewer_rating_1), 3))
+hiring_table_gi2 <- hiring_table_3
+hiring_table_gi2 <- hiring_table_gi2 %>%
+  group_by(gender) %>%
+  summarise(round(mean(interviewer_rating_2), 3))
+hiring_table_gl
+hiring_table_gs
+hiring_table_gi1
+hiring_table_gi2
+```
+
