@@ -114,7 +114,7 @@ _In this section you will summarize your findings across all the research questi
 
 The Dataable Code of Ethical Conduct is one of the approaches we put the values of Dataable into practice. This code provides guidelines and principles our team members follow in statistical consulting.
 
-* Out of respect for integrity of data and methods, 
+* Out of respect for integrity of data and methods, we strive to clearly and fully report the steps taken to preserve data integrity and valid results. We acknowledge any assumption made in the execution and interpretation of any analysis, and make efforts to convey the findings in ways that are both honest and meaningful to our clients.
 
 * Out of respect for confidentiality requirements of data collection and dissemination, we understand and conform the restrictions established by the data provider, providing protection approaches for the use and disclosure of data accordingly.
 
