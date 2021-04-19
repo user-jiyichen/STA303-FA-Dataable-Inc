@@ -119,3 +119,5 @@ The Dataable Code of Ethical Conduct is one of the approaches we put the values 
 * Out of respect for confidentiality requirements of data collection and dissemination, we understand and conform the restrictions established by the data provider, providing protection approaches for the use and disclosure of data accordingly.
 
 * Out of respect for fellow statisticians and practitioners, we thrive to strengthen the work of others via adequate and thoughtful peer reviews. We actively promote sharing of data and methods as much as possible without compromising ownership and provide documentation suitable for replicate analyses and relevant researches. 
+
+* Out of respect for research subjects, we acknowledge the legal limitations on privacy and confidentiality assurances and does not assume legal privacy and confidentiality protections where they may not apply. We highly recognize that any statistical descriptions of groups may carry risks of stereotypes and stigmatization and strive to avoid disproportionate and possible harm to vulnerable groups.
