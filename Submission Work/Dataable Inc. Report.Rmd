@@ -1,0 +1,952 @@
+---
+title: "An investigation on Black Saber Software's potential systematic gender bias"
+subtitle: "A statistical analysis on unfair Hiring selection, Promotion opportunities and Salary increase in Black Saber Software"
+author: "Dataable Inc."
+date: 2021-04-21
+lang: "en"
+output:
+  pdf_document:
+    template: report.tex
+    toc: true
+    toc_depth: 2
+titlepage: true
+titlepage-color: "6C3082"
+titlepage-text-color: "FFFFFF"
+titlepage-rule-color: "FFFFFF"
+titlepage-rule-height: 2
+---
+
+```{r, message = FALSE, echo=FALSE}
+rm(list = ls())
+library(tidyverse)
+library(lme4)
+library(boot)
+library(MASS)
+library(knitr)
+library(gridExtra)
+library(cowplot)
+library(kableExtra)
+# this should supress all code and messages
+knitr::opts_chunk$set(include=FALSE)
+```
+
+\newpage
+# Executive summary
+## Background & Aim 
+
+Internal concerns on the potential bias in the hiring and remuneration process in the Black Saber Softwares has been raised by its current employees and board members. In response to the board, current and future employees, this research is carried out by the Dataable Inc. to study whether the decisions of candidates who receive promotion on position, raising of salary and final offers are entirely based on their talent and value to the company without interruption of gender bias.
+
+## Key findings
+
+* The data team prefer males than females in phase 1 during the hiring process while software team are more fair with gender in this phase. 
+* No signal of gender discrimination is identified in phase 2 and phase 3 in both data and software teams.
+* For the leadership level rating, only men receive positive feedback i.e. Exceeds expectations and only women receive lower feedback i.e. needs improvement
+*	Gender bias exists in the promotion scheme and differs by team, but most of their magnitudes are moderate, mostly less than 10% in terms of average counts of promotion.
+*	After accounting for the effect of the department that one employee is working in, years they have been working (this is just the representation of repeated measurement of employees), the females' average salary is 4854.75 less than what of male, and male's average salary is approximately 45016.94.
+
+## Limitations
+
+* Very few data is available in analyzing the potential gender bias in the third phase of hiring process thus results are not completely accurate.
+* Alogorithms for AI grading scheme is not provided thus no conclusions can be generate about whether the grading system is genderly biased.
+* The group of employees who prefer not to say their gender is excluded from the research because very few people is found to be in this group. Addtioanlly, since the group with gender prefer not to say may include males, females and LGBT group, thus including them in the research is not scientific and we encourage a more specific category about these groups to be established so prejudice on sexual minorities can be studied in depth. 
+
+
+## Graphs
+
+Here are some figures of summary statistics:
+
+```{r , echo=FALSE, include=TRUE, warning=FALSE, message=FALSE}
+phase1 <- read_csv('data/phase1-new-grad-applicants-2020.csv') # import data set
+phase2 <- read_csv('data/phase2-new-grad-applicants-2020.csv') # import data set
+attach(phase1)
+attach(phase2)
+hiring_table_1 <- phase2 %>%
+  mutate(promotion = 1)
+hiring_table_1 <- phase1 %>%
+  left_join(hiring_table_1)
+hiring_table_1 <- hiring_table_1 %>%
+  mutate_if(is.numeric, 
+  replace_na, replace = 0) %>%
+  filter(cv == 1, cover_letter == 1)
+hiring_table_1 <- hiring_table_1 %>%
+  filter(gender == 'Man'|gender == 'Woman') # Create a hiring table from phase 1 to phase 2 excluding gender 'preferred no to say', and applicants who did not submit the cover letters or cv
+nm <- hiring_table_1 %>%
+  filter(gender == 'Man')
+nm <- nrow(hiring_table_1)/nrow(nm)
+nw <- hiring_table_1 %>%
+  filter(gender == 'Woman')
+nw <- nrow(hiring_table_1)/nrow(nw)
+rate1 <- hiring_table_1 %>%
+  group_by(gender, team_applied_for) %>%
+  summarise(sum(promotion)/nrow(hiring_table_1))
+colnames(rate1) <- c('gender', 'team', 'promotion rate')
+rate1 <- rate1 %>%
+  mutate(`promotion rate` = round(`promotion rate`, 5))
+rate1[1, 3] <- round(rate1[1, 3] * nm, 3)
+rate1[2, 3] <- round(rate1[2, 3] * nm, 3)
+rate1[3, 3] <- round(rate1[3, 3] * nw, 3)
+rate1[4, 3] <- round(rate1[4, 3] * nw, 3) # Create a conditional table based on gender 
+plot1 <- rate1 %>% 
+  ggplot()+
+  geom_bar(aes(x = gender, y = `promotion rate`, fill = team), stat = "identity")+
+  labs(title = 'Promotion Rate from Phase 1 to Phase 2',
+       x = 'gender',
+       y = 'promotion rate')+
+  theme(legend.title = element_blank(), legend.position = c(0.15, 0.8))+
+  scale_y_continuous(limits = c(0, 1)) +
+  theme(text = element_text(size = 3), element_line(size = 0.1)) +
+  theme_minimal() +
+  theme( plot.title = element_text(size = 10, face = "bold")) # plot a bar plot of conditional probability based on gender
+# explanatory data analysis
+data = read.csv('data/black-saber-current-employees.csv') %>% 
+  mutate(salary = as.numeric(gsub('\\$|\\,','',salary)))
+#  average salary by gender NVM
+avg_sal = aggregate(salary~gender, data %>% filter(gender!='Prefer not to say'), FUN=mean)
+
+# employee data with unique id in 2020 Q4
+curr_emp = data %>% 
+  filter(role_seniority %in% c('Senior III','Manager','Director',
+                               'Vice president')) %>% 
+  distinct(employee_id,.keep_all = T)
+
+# 3. seniority breakdown in the latest financial quarter i.e. 2020 Q4
+role = c('Vice president','Director','Manager','Senior III','Senior II',
+         'Senior I','Junior II','Junior I','Entry-level') # ideal order
+
+plot2 <- data %>% 
+  mutate(role_seniority = factor(role_seniority,levels = role)) %>% 
+  filter(gender!='Prefer not to say') %>% 
+  distinct(employee_id,.keep_all = T) %>% 
+  group_by(gender) %>% 
+  count(role_seniority) %>% 
+  arrange(desc(role_seniority)) %>% 
+  ggplot(aes(x = n, y = role_seniority, fill=gender))+
+  geom_bar(stat = 'identity')+
+  theme_minimal()+
+  labs(title = 'Number of Employees Barplot in 2020 Q4',
+       subtitle = 'by seniority and gender',
+       x = 'Count', y = 'Seniority') +
+   theme( plot.title = element_text(size = 10, face = "bold"))
+
+# salary related observations  
+
+# non-management job salary by gender
+plot3 <- data %>% 
+  filter(gender!='Prefer not to say', !role_seniority %in% 
+           c('Director','Manager','Vice president')) %>% 
+  ggplot(aes(y=role_seniority,x=salary,fill=gender))+
+  geom_boxplot()+
+  theme_minimal()+
+  labs(title = 'Salary Boxplot',subtitle = 'by seniority and gender',
+       y = 'Seniority',x = 'Salary') +
+  theme( plot.title = element_text(size = 10, face = "bold"))+
+  scale_x_continuous(breaks = c(40000,60000))
+
+ 
+
+
+##### 4. quality rating of leadership at each level by gender
+better = data %>% 
+  filter(gender != 'Prefer not to say') %>% 
+  group_by(leadership_for_level,role_seniority,gender) %>% 
+  count(leadership_for_level) %>% 
+  arrange(desc(role_seniority),desc(leadership_for_level),desc(gender)) %>% 
+  filter(leadership_for_level == 'Exceeds expectations') %>% 
+  rename('Leadership Quality'=leadership_for_level,
+         'Seniority' = role_seniority,
+         'Gender' = gender,
+         'Count' = n)
+   #scale_fill_manual(values = '#003F5C','#86BCB6')
+#knitr::kable(better,
+#             caption = "All employees reveiving 'Exceeds expectations' by seniority", format = 'markdown', padding=-1L) 
+
+worse = data %>% 
+  filter(gender != 'Prefer not to say') %>% 
+  group_by(leadership_for_level,role_seniority,gender) %>% 
+  count(leadership_for_level) %>% 
+  arrange(desc(role_seniority),desc(leadership_for_level),desc(gender)) %>% 
+  filter(leadership_for_level == 'Needs improvement') %>% 
+  rename('Leadership Quality'=leadership_for_level,
+         'Seniority' = role_seniority,
+         'Gender' = gender,
+         'Count' = n)
+
+#knitr::kable(worse,
+#             caption = "All employees reveiving 'Needs improvement' by seniority")
+
+plot_grid(plot1, plot2, plot3,labels = "AUTO")
+
+```
+
+
+
+\newpage
+# Technical report
+
+## Introduction
+
+In the following technical report, we mainly presented all the statistical details 
+of all the answers to the three research questions listed below. We have excluded 
+the gender "Prefer not to say" since the sample size for this gender is too small 
+for all the three research questions we have studied. In the first research question, 
+we discussed the potential gender discriminations, i.e., whether males and females 
+were facing a different probability of getting recruited into the Black Saber Company. 
+In the second research question, this analysis explores any gender bias in job 
+promotion in the Black Saber Company. Last, we studied whether there is potential 
+gender bias in salary among the current employees while considering the team 
+difference. For all the three research questions, we first presented the statistical methods used in each of the research questions thoroughly, including what they are, 
+why they are used, how they are used, and why they are appropriate for each of 
+the research questions. Second, we showed all the statistical results, such as 
+tables and figures produced by exploratory data analysis, and some statistical 
+summaries like values of coefficients, p-values and confidence intervals. In the 
+last part of the report, we discussed the limitations of our analysis and some 
+potential improvements that can be done in future study as well.
+
+### Research Questions
+The research questions are listed as following:
+
+* Based on team applied for, whether there exists any bias on women for each hiring 
+phase.
+
+* Based on the current employees promotion data, whether or not there exists any 
+gender bias in job promotion in the Black Saber Software Company.
+
+* Based on the current employees salary data, whether or not there exists any gender 
+bias in salary in the Black Saber Software Company.
+
+For the first research question listed above, we have defined bias as different 
+probability in getting into the next phase between male and female while setting 
+other factors like GPA being the same, and in the second research question, 
+we defined the bias as different opportunities in promotion between male and female 
+while other factors being the same, such as comparing the promotion times in unit 
+of working times, i.e., to set off the effects of different working times. Here 
+a metric of promotion procedure can be the number of times an employee gets promoted 
+in their career, and the scope of gender bias can be a significant counts gap by 
+gender. Also, if such bias exists, does it differ by which team group one belongs 
+to? We would like to use the data available with a valid model to estimate such 
+gender differences. For the third research question, we wanted to know whether 
+there exists salary difference between male and female after taking into consideration 
+of different teams.
+
+## Potential Gender Bias in Hiring Phase
+
+### Methods
+
+* Study Design
+  + A comprehensive study focusing on the potential gender discrimination was conducted to compare its effect on the Blake Saber Software’s hiring process. 
+
+* Participants
+
+  + A total of 613 participants involved in the New Grad program who went through the application process with personal information uploaded were included in this research. 
+
+
+* Data Wrangling
+
+  + Considering the fact that Blake Saber Software’s hiring process involved 3 separate stages where only qualified appliers will be moved forward, the analysis would also be separated to discover the potential sexual discrimination and thus the data provided were reconstructed for a better visualization. 
+  + Data with the gender 'Prefer not to say' will not be considered in the model since the sample size is too small.
+  + The new created variable Promotion in all three phases was measured according to the presence in the next stage with 0 if not pushed forward, 1 being selected for the next stage. 
+
+  + Stage one data involves basic information first underwent a wrangling process that appliers with absence in the submitting of cover letter and resume are removed because of the fact that no appliers with no resume or cover letter were moved to phase2. A new column named promotion was added to indicate whether the appliers were moved forward. Considering the fact that the data team and development team have different idea appliers, the table was divided by the department that appliers apply for. 
+
+  + Similar to stage one, the data for stage two which collects AI-auto graded skills was also divided into two tables according to the department they applied for and the column named promotion indicating whether appliers were moved to third phase was created. 
+
+  + The stage three data which contains interview scores from two interviewers was also granted the new column promotion indicating whether the appliers were selected for the formal employees. Due to the discovery that two scores are similar in magnitude, a new variable named 'interviewer rating' was added to identify the overall satisfaction from the company. 
+  
+* Statistical methods
+  
+  + Graph describes the promotion rate from phase 1 to phase 2 based on gender will be presented. Teams will be distinguished on the graph by using difference colour.
+  
+  + The conditional table was applied when an overview of the distribution of successful application conditional on each gender are needed from phase 2 to phase 3. By establishing such table, we are ignoring the potential difference between groups i.e. we are assuming holding a similar background between each gender groups, how are the gender affecting the success in each state.
+  
+  + A dot plot of promotion versus interviewer rating is fitted to see if there is any relationship between interviewer rating and promotion from phase 3 to final hiring.
+  
+  + Generalized linear models and linear models are introduced and fitted to solve the question on gender bias in each phase.
+    - For phase 1, two generalized linear models are fitted: 
+      $$promotion_{di} \sim Bernoulli(\mu_{di})$$
+      $$promotion_{si} \sim Bernoulli(\mu_{si})$$
+      $$log \frac{\mu_{di}}{1-\mu_{di}}=\beta_{d1}gpa_{di}+\beta_{d2}gender_{di}+\beta_{d3}extracurriculars_{di}$$
+      $$log \frac{\mu_{si}}{1-\mu_{si}}=\beta_{s1}gpa_{si}+\beta_{s2}gender_{si}+\beta_{s3}extracurriculars_{si}$$
+      
+      The subscript d represents the model for data team, and the subscript s represents the model for software team.
+      
+      There are two categories for gender, man and woman.
+      
+      There are three levels for extracurriculars: 0, 1 and 2. 0 means there is no related extracurriculars, 2 means that there are several high level 
+      skills extracurriculars. 1 is the moderate level.
+      
+      Generalized linear models are fitted since the response variable promotion has only two values 0 and 1, which follows a bernoulli distribution. Besides, I assume there is no violation in the independence assumption since gpa, gender, extracurriculars are considered to be independent.
+   
+    - For phase 2, two generalized linear models are fitted: 
+      $$promotion_{di} \sim Bernoulli(\mu_{di})$$
+      $$promotion_{si} \sim Bernoulli(\mu_{si})$$
+      $$log \frac{\mu_{di}}{1-\mu_{di}}=\beta_{d1}techinical\ skills_{di}+\beta_{d2}writing\ skills_{di}$$
+      $$+\beta_{d3}speaking\ skills_{di}+\beta_{d4}leadership\ presence_{di}+\beta_{d5}gender_{di}$$
+      $$log \frac{\mu_{si}}{1-\mu_{si}}=\beta_{s1}techinical\ skills_{si}+\beta_{s2}writing\ skills_{si}+$$
+      $$+\beta_{s3}speaking\ skills_{si}+\beta_{s4}leadership\ presence_{si}+\beta_{s5}gender_{si}$$
+      
+      Each skills have a scope of 0 to 100, AI autograded.
+    
+    - For phase 3, two generalized linear models are fitted: 
+      $$interviewer\ rating_{di} \sim \mathcal{N}(\mu_{di},\,\sigma_{di}^{2})$$
+      $$interviewer\ rating_{di} \sim \mathcal{N}(\mu_{si},\,\sigma_{si}^{2})$$
+      $$\mu_{di}=\beta_{d1}techinical\ skills_{di}+\beta_{d2}writing\ skills_{di}$$
+      $$+\beta_{d3}speaking\ skills_{di}+\beta_{d4}leadership\ presence_{di}+\beta_{d5}gender_{di}$$
+      $$\mu_{si}=\beta_{s1}techinical\ skills_{si}+\beta_{s2}writing\ skills_{si}+$$
+      $$+\beta_{s3}speaking\ skills_{si}+\beta_{s4}leadership\ presence_{si}+\beta_{s5}gender_{si}$$
+      
+      Interviewer rating stands for the average rating of job fit given by the two interviewers on a scale of 0 to 100.
+      
+      Linear model is fitted since the response variable is interviewer rating, which is assumed to be normally distributed. Besides, techinical skills, leadership prensence, gender, speaking 
+      skills, writing skills are assumed to be independent. 
+      
+### Results
+#### Phase 1 to Phase 2 
+
+* Figure 1 below describes the promotion rate from phase 1 to phase 2 based on gender. Note that colour represents different teams that applicants apply for. The promotion rate of woman is higher than man when they apply for the software team. The promotion rate of woman is lower than man when they apply for the software team. The overall promotion rates are similar within gender.
+  
+```{r, include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+# Import the data set
+phase1 <- read_csv('data/phase1-new-grad-applicants-2020.csv')
+phase2 <- read_csv('data/phase2-new-grad-applicants-2020.csv')
+# Create a hiring table with gender excluding 'Prefer not to say', and applicants who did not submit the cover letters or cv
+hiring_table_1 <- phase2 %>%
+  mutate(promotion = 1)
+hiring_table_1 <- phase1 %>%
+  left_join(hiring_table_1)
+hiring_table_1 <- hiring_table_1 %>%
+  mutate_if(is.numeric, 
+  replace_na, replace = 0) %>%
+  filter(cv == 1, cover_letter == 1)
+hiring_table_1 <- hiring_table_1 %>%
+  filter(gender == 'Man'|gender == 'Woman')
+hiring_table_1d <- hiring_table_1 %>%
+  filter(team_applied_for == 'Data') # Hiring table for data team
+hiring_table_1s <- hiring_table_1 %>%
+  filter(team_applied_for == 'Software') # Hiring table for software team
+# Create a conditional probabilty table of promotion rate based on gender separated by the team they apply for
+nm <- hiring_table_1 %>%
+  filter(gender == 'Man')
+nm <- nrow(hiring_table_1)/nrow(nm)
+nw <- hiring_table_1 %>%
+  filter(gender == 'Woman')
+nw <- nrow(hiring_table_1)/nrow(nw)
+rate1 <- hiring_table_1 %>%
+  group_by(gender, team_applied_for) %>%
+  summarise(sum(promotion)/nrow(hiring_table_1))
+colnames(rate1) <- c('gender', 'team', 'promotion rate')
+# plot a bar plot of conditional probability based on gender
+rate1 <- rate1 %>%
+  mutate(`promotion rate` = round(`promotion rate`, 5))
+rate1[1, 3] <- round(rate1[1, 3] * nm, 3)
+rate1[2, 3] <- round(rate1[2, 3] * nm, 3)
+rate1[3, 3] <- round(rate1[3, 3] * nw, 3)
+rate1[4, 3] <- round(rate1[4, 3] * nw, 3)
+
+rate1 %>% 
+  ggplot()+
+  geom_bar(aes(x = gender, y = `promotion rate`, fill = team), stat = "identity")+
+  labs(title = 'Figure 1: Promotion Rate from Phase 1 to Phase 2 Based on Gender',
+       x = 'gender',
+       y = 'promotion rate')+
+  theme(legend.title = element_blank(), legend.position = c(0.15, 0.8))+
+  scale_y_continuous(limits = c(0, 1)) +
+  theme(text = element_text(size = 3), element_line(size = 0.1)) +
+  theme_minimal()
+```
+
+* Two GLM models have been fitted. The estimation, p-values and bounds for confidence intervals of each variable from phase 1 are summarized in Table 1 and Table 2 (all values except p-values are exponentiated):  
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+# Create two glms based on the variables from the first phase
+model_1 <- glm(promotion ~ team_applied_for + gpa + gender + extracurriculars , family=binomial(link = 'logit'), data = hiring_table_1)
+model_1d <- glm(promotion ~ gpa + gender + extracurriculars , family=binomial(link = 'logit'), data = hiring_table_1d)
+model_1s <- glm(promotion ~ gpa + gender + extracurriculars , family=binomial(link = 'logit'), data = hiring_table_1s)
+est_1d <- format(round(exp(summary(model_1d)$coeff)[,1], 3), nsmall = 2)
+p_val_1d <- summary(model_1d)$coeff[,4]
+ci_1d <- format(round(exp(confint(model_1d)), 3), nsmall = 2) 
+summary_table = data.frame(Estimate = as.numeric(est_1d),
+                            'p value' = round(p_val_1d,4),
+                            'Lower Bound' = as.numeric(ci_1d [,1]),
+                            'Upper Bound' = as.numeric(ci_1d [,2]))
+
+kable(summary_table,caption = 'Summary Statistics of Generalized Linear model of Phase 1 Data Group')%>%
+  kable_styling(latex_options = "HOLD_position")
+est_1s <- format(round(exp(summary(model_1s)$coeff)[,1], 3), nsmall = 2)
+p_val_1s <- summary(model_1s)$coeff[,4]
+ci_1s <- format(round(exp(confint(model_1s)), 3), nsmall = 2) 
+summary_table = data.frame(Estimate = as.numeric(est_1s),
+                            'p value' = round(p_val_1s,4),
+                            'Lower Bound' = as.numeric(ci_1s [,1]),
+                            'Upper Bound' = as.numeric(ci_1s [,2]))
+
+kable(summary_table,caption = 'Summary Statistics of Generalized Linear model of Phase 1 Software Group')%>%
+  kable_styling(latex_options = "HOLD_position")
+
+```
+
+* In our model with categorical variables, the coefficients can be interpreted as log odd ratios, and after exponentiation, $\frac{\frac{\mu_{female}}{1-\mu_{female}}}{\frac{\mu_{male}}{1-\mu_{male}}} = e^{\beta_{gender}}$ denotes the odd ratio i.e. the percent change in the response for a categorical change in X. 
+
+* In table 1, our major variable of interest 'gender' as well as the constant term are  statistically significant with at the 0.05 level. The gender estimate($\beta_1 \approx 0.694<1$) implies that the odds that female applicant who apply for the data team get promoted into next phase are approximately 0.9 times that of male applicants on average while holding other variables fixed. It shows a potential gender discrimination to female in terms of the applicants of data team from phase 1 to 2.
+
+* In table 2, gender is not statistically significant with at the 0.05 level. So we fail to reject that is no evidence of gender discrimination in terms of the applicants of software team from phase 2 to 3.
+
+
+#### Phase 2 to Phase 3
+
+* Table 3 is the conditional table of the distribution of successful application conditional on each gender. The table indicates that female applicants have a lower promotion rate than male applicants.
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+# Create a hiring table with gender excluding 'Prefer not to say', and applicants who did not submit the cover letters or cv
+phase3 <- read_csv('data/phase3-new-grad-applicants-2020.csv')
+hiring_table_2 <- phase3 %>%
+  mutate(promotion = 1)
+hiring_table_2 <- phase2 %>%
+  left_join(hiring_table_2)
+hiring_table_2 <- hiring_table_2 %>%
+  mutate_if(is.numeric, 
+  replace_na, replace = 0) 
+hiring_table_2 <- hiring_table_2 %>%
+  filter(gender == 'Man'|gender == 'Woman')
+hiring_table_2d <- hiring_table_2 %>%
+  filter(team_applied_for == 'Data') # Hiring table for data team
+hiring_table_2s <- hiring_table_2 %>%
+  filter(team_applied_for == 'Software') # Hiring table for software team
+rate_table_2 <- table(data.frame('gender' = hiring_table_2$gender,
+                          'promotion' = hiring_table_2$promotion
+                          ))
+rate_table_2 <- prop.table(rate_table_2, margin = 1)
+rate_table_2 <- round(prop.table(rate_table_2, margin = 1) ,3)
+rate_table_2 <- as.data.frame.matrix(rate_table_2)
+colnames(rate_table_2) <- c('not promoted', 'promoted')
+kable(rate_table_2, caption = 'Summary of Promotion Rate from phase 2 to phase 3 Conditional on Gender')%>%
+  kable_styling(latex_options = "HOLD_position")
+
+```
+
+* Two GLM models have been fitted. The estimation, p-values and bounds for confidence intervals of each variable from phase 2 are summarized in Table 4 and Table 5 (all values except p-values are exponentiated): 
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+# Create two glms based on the variables from the second phase
+model_2d <- glm(promotion ~ technical_skills+ writing_skills + leadership_presence + speaking_skills + gender, family=binomial(link = 'logit'), data = hiring_table_2d)
+model_2s <- glm(promotion ~ technical_skills+ writing_skills + leadership_presence + speaking_skills + gender, family=binomial(link = 'logit'), data = hiring_table_2s)
+est_2d <- format(round(exp(summary(model_2d)$coeff)[,1], 3), nsmall = 2)
+p_val_2d <- summary(model_2d)$coeff[,4]
+ci_2d <- format(round(exp(confint(model_2d)), 3), nsmall = 2) 
+summary_table = data.frame(Estimate = as.numeric(est_2d),
+                            'p value' = round(p_val_2d,4),
+                            'Lower Bound' = as.numeric(ci_2d [,1]),
+                            'Upper Bound' = as.numeric(ci_2d [,2]))
+
+kable(summary_table,caption = 'Summary Statistics of Generalized Linear model of Phase 2 Data Group')%>%
+  kable_styling(latex_options = "hold_position")
+est_2s <- format(round(exp(summary(model_2s)$coeff)[,1], 3), nsmall = 2)
+p_val_2s <- summary(model_2s)$coeff[,4]
+ci_2s <- format(round(exp(confint(model_2s)), 3), nsmall = 2) 
+summary_table = data.frame(Estimate = as.numeric(est_2s),
+                            'p value' = round(p_val_2s,4),
+                            'Lower Bound' = as.numeric(ci_2s [,1]),
+                            'Upper Bound' = as.numeric(ci_2s [,2]))
+
+kable(summary_table,caption = 'Summary Statistics of Generalized Linear model of Phase 2 Software Group')%>%
+  kable_styling(latex_options = "HOLD_position")
+
+```
+
+* In table 4, our major variable of interest 'gender' is not statistically significant with at the 0.05 level. So we fail to reject that is no evidence of gender discrimination in terms of the applicants of data team from phase 2 to 3.
+
+* In table 5, gender  is not statistically significant with at the 0.05 level. So we fail to reject that is no evidence of gender discrimination in terms of the applicants of software team from phase 2 to 3.
+
+
+#### Phase 3 to Final Phase
+* Figure 2 is the dot plot of promotion versus interviewer rating. A positive relationship has been shown between promotion and interviewer rating. Students who get a score over 76.5 are hired by the company, and those who has a score lower than 76.5 are not hired. Moreover, out of two applicants with a score of 76.5, one is hired and the other is not.
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+# Create a hiring table with gender excluding 'Prefer not to say' from the last phase.
+phase4 <- read_csv('data/final-hires-newgrad_2020.csv')
+hiring_table_3 <- phase4 %>%
+  mutate(promotion = 1)
+hiring_table_3 <- phase3 %>%
+  left_join(hiring_table_3)
+hiring_table_3 <- phase2 %>%
+  right_join(hiring_table_3)
+hiring_table_3 <- hiring_table_3 %>%
+  mutate_if(is.numeric, 
+  replace_na, replace = 0) 
+hiring_table_3 <- hiring_table_3 %>%
+  filter(gender == 'Man'|gender == 'Woman')
+hiring_table_3 <- hiring_table_3 %>%
+  mutate(interviewer_rating = ((interviewer_rating_1+interviewer_rating_2)/2))
+hiring_table_3d <- hiring_table_3 %>%
+  filter(team_applied_for == 'Data') # Create a hiring table with with data team
+hiring_table_3s <- hiring_table_3 %>%
+  filter(team_applied_for == 'Software') # Create a hiring table with with software team
+# plot a dot plot of promotion vs interviewer rating
+hiring_table_3 %>% 
+  ggplot()+
+  geom_count(aes(x = interviewer_rating, y = promotion, colour = team_applied_for), stat = "identity")+
+  labs(title = 'Figure 2: Dot Plot of Promotion VS. interviewer rating',
+       x = 'interviewer rating',
+       y = 'promotion')+
+  theme(legend.title = 'None', legend.position = c(0.15, 0.8))+
+  scale_y_discrete(limits = c(0, 1)) +
+  theme_minimal() 
+```
+
+* Two linear models have been fitted. The estimation, p-values and bounds for confidence intervals of each variable are summarized in Table 6 and Table 7:  
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+# Create two linear models with interviewer rating being the response variables.
+model_3d <- lm(interviewer_rating ~ writing_skills + technical_skills + leadership_presence + speaking_skills +gender, data = hiring_table_3d)
+est_3d <- format(round(exp(summary(model_3d)$coeff)[,1], 3), nsmall = 2)
+p_val_3d <- summary(model_2d)$coeff[,4]
+ci_3d <- format(round(exp(confint(model_3d)), 3), nsmall = 2) 
+summary_table = data.frame(Estimate = as.numeric(est_3d),
+                            'p value' = round(p_val_3d,4),
+                            'Lower Bound' = as.numeric(ci_3d [,1]),
+                            'Upper Bound' = as.numeric(ci_3d [,2]))
+
+kable(summary_table,caption = 'Summary Statistics of Generalized Linear model of Phase 3 Data Group') %>%
+  kable_styling(latex_options = "HOLD_position")
+model_3s <- lm(interviewer_rating ~ writing_skills + technical_skills + leadership_presence + speaking_skills +gender, data = hiring_table_3s)
+est_3s <- format(round(exp(summary(model_3s)$coeff)[,1], 3), nsmall = 2)
+p_val_3s <- summary(model_3s)$coeff[,4]
+ci_3s <- format(round(exp(confint(model_3s)), 3), nsmall = 2) 
+summary_table = data.frame(Estimate = as.numeric(est_3s),
+                            'p value' = round(p_val_3s,4),
+                            'Lower Bound' = as.numeric(ci_3s [,1]),
+                            'Upper Bound' = as.numeric(ci_3s [,2]))
+
+kable(summary_table,caption = 'Summary Statistics of Generalized Linear model of Phase 3 Software Group')%>%
+  kable_styling(latex_options = "HOLD_position")
+```
+
+*  In table 6 and 7, technical skills, writing skills, leadership presence, speaking skills are statistically significant at the 0.05 level. While gender is not statistically significant. So holding other variables constant, there is no evidence that the average rating from two interviewers differs from man to woman. So there is no evidence that there is gender discrimination in interviewer rating.
+
+* By the positive relationship between the interviewer rating and promotion, there is no evidence that there is gender bias from phase 3 to the final hire phase.
+
+
+
+## Fewer promotion opportunities for women: an investigation
+
+### Methods 
+
+* Study Design
+  
+  + We conducted a retrospective analysis to find if there is any gender bias in promotion in terms of the number of times employees achieve higher role advancement. 
+
+* Participants
+  
+  + A total of 607 Black Saber Software current employees identified with unique ID were included, but those who preferred not to report their gender type were excluded for better male/female comparison. The staff data was kindly provided by Mr. Gideon Blake, the chief people officer of the client company. There are 8 teams with 9 different seniority roles, and the performance of employees is evaluated by two aspects, leadership level and work productivity, using a three-level ranking and a 0-100 numerical scale rating, respectively. 
+* Data wrangling
+  
+  + Two new measurements called promotion time and working time, were created in terms of the number of financial quarters. The aim of these two variables is to gauge how many times an employee got promoted and how long they have been in this company in their career, separately. The steps of data manipulation are as follows:
+
+    1. Change the names of each variable to make it clearer for the general audience 
+
+    2. Remove employees with gender type being 'Prefer not to say' for better comparison purpose
+
+    3. Create two new variables called 'promotion time' and 'working time'
+
+    4. Remove 'Q' in the financial quarter column as well as the space in front of 'Q', and make it numeric for ordering purpose. Also remove special signs such as '$', ',' in the salary column and make it numeric.
+
+    5. Join the auxiliary tables together, only left with variables of interest for promotion research question.
+
+    6. Remove employees with gender type being 'Prefer not to say' for better comparison purpose
+
+  + Table 8 and Table 9 are samples of observations before and after wrangling, respectively:
+
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+# read the dataset of current employees
+raw = read_csv('data/black-saber-current-employees.csv')
+data = read_csv('data/black-saber-current-employees.csv') %>% 
+  mutate(salary = as.numeric(gsub('\\$|\\,','',salary)))
+# turn salary column into numeric
+```
+
+
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+## PROMOTION RESEARCH QUESTION
+
+# add a new variable called 'number of promotion'
+promotion_time = data %>% 
+  group_by(employee_id,gender) %>% 
+  summarize(promotion_times = n_distinct(role_seniority)-1)
+
+# add a new variable called 'working time' indicating number of quarters
+# an employee has been in this company
+promotion_time$working_time = count(data,employee_id)$n
+
+# create a new table to include the first quarter each 
+# employee joined this company
+
+# turn the variable 'financial_q' into numeric for ordering
+earlist_enter_time = data %>% 
+  
+  mutate(financial_q = as.numeric(gsub("[^\\d]+", "", financial_q, perl=TRUE))) %>% 
+  group_by(employee_id,gender) %>% 
+  summarise(financial_q = min(financial_q))
+
+delete_Q = data %>% 
+  mutate(financial_q = as.numeric(gsub("[^\\d]+", "", financial_q, perl=TRUE))) %>% 
+  dplyr::select(employee_id,gender,financial_q,role_seniority,team)
+
+# join the helping tables to get all variables of interest
+promotion_time2 = earlist_enter_time %>% 
+  left_join(delete_Q,by = c('financial_q','employee_id','gender')) %>% 
+  left_join(promotion_time,by = c('employee_id','gender'))
+
+# exclude 'Prefer not to say' gender
+binary_gender = promotion_time2 %>% 
+  filter(gender != 'Prefer not to say')
+
+#The first five observations from the dataset before wrangling
+knitr::kable(head(raw,n=5L),
+             caption = 'The first five observations in the initial dataset')%>% 
+  kable_styling(latex_options="HOLD_position")%>% 
+  kable_styling(latex_options="scale_down")
+
+# The first five observations from the dataset after wrangling
+knitr::kable(head(binary_gender,n=5L),
+             caption = 'The first five observations in the dataset after manipulation')%>% 
+  kable_styling(latex_options="HOLD_position")%>% 
+  kable_styling(latex_options="scale_down")
+```
+
+* Statistical Methods
+  + To compare the differences of the counts of promotion by gender, we decided to estimate a negative binomial generalized linear model, after a long model selection process which is discussed later. The expression of the model is the following:
+$$log(\frac{\lambda}{working\ time}) = \beta_0 + \beta_1(gender)+\beta_2(team) $$which is equivalent to $$log(\lambda) = \beta_0 + \beta_1(gender)+\beta_2(team)+log(working \ time)$$
+where $\lambda$ is the mean count of promotion, $working \ time$ is the total number of financial quarters one has stayed in this company, and other variables have been introduced previously. The negative binomial model can be considered as a Poisson model where $\lambda$ is random and follows a Gamma distribution.
+
+  + We took $team$ as a fixed effect due to the fact that every employee always gets promoted within their initial team that hired them and that different team groups are likely to have different promotion schemes.
+
+  + The model included an offset term $log(working \ times)$ since different employees may have worked for this company for different years. For example, a vice president has been promoted 6 times over his 10-year career in this company, whereas an entry-level worker hasn't got any promotion just because he is newly employed yesterday! $\frac{\lambda}{working \ time}$denotes the promotion time counts in terms of the rate per financial quarter for each employee, which accounts for the differences in working time.
+
+  + Since the negative binomial model is indeed a Poisson model whose parameter $\lambda$ is random, it suffices to check the Poisson model assumptions with an adjustment in the model=variance assumption:
+
+    - Poisson Response. The response variable is a count of promotion times per quarter, so it is a valid Poisson response.
+
+    - Independence. Work performance and productivity of employees are the main metrics of promotion. Some may argue that promotion chances differ by team, but we will show via Likelihood Ratio Test that such team grouping effects are not statistically significant by a generalized linear mixed model. As a result, it is plausible to assume that promotion counts are independent of each other.
+
+    - Linearity. Linearity with respect to $log(\lambda)$ is difficult to discern without continuous predictor variables, thus not the main concern here.
+
+    - Mean = Variance. Check if the empirical means and variances of the count of promotion times are approximately equal for the overall data(Table 10) as well as for each team(Table 11):
+
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+# Poisson model assumption check
+# overall difference between mean and variance
+mean_var = data.frame('overall mean' = round(mean(binary_gender$promotion_times),3),
+'overall variance' = round(var(binary_gender$promotion_times),3))
+knitr::kable(mean_var,caption = 'Table C: Overall mean and variance ')%>%
+  kable_styling(latex_options = "HOLD_position")
+
+# compare mean and variance within each team
+team_mean_var = binary_gender %>%
+  group_by(team) %>%
+  summarise('mean' = mean(promotion_times),variance = var(promotion_times))
+  #labs(title ='Comparison of mean and variance of number of promotion within each team group')
+
+knitr::kable(team_mean_var, caption = 'Mean and variance across team')%>%
+  kable_styling(latex_options = "HOLD_position")
+```
+   
+  We can see from Table 11 that most of the variances are moderately larger than means and there are different variability among team groups, which is an evidence of the violation against the mean=variance assumption. This is also the purpose/reason why we apply the negative binomial model to deal with over-dispersion.
+
+  In terms of model selection, we first considered a negative binomial model for which $log(\frac{\lambda}{working \ time})$is only linear in gender. Both the gender and constant terms are significantly different from zero, which is an indication of gender difference in promotion counts. Next, we added the 'team' term to account for group difference in promotion and applied the likelihood ratio test for model comparison. The <0.05 p-value indicates that it is statistically significant to add the variable 'team' as a fixed effect.
+    
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+## compare different GLMMs with random effects and the simple GLM above using LRT
+
+# the GLM NB model
+model_single = glm.nb(promotion_times ~ gender,
+                  offset(log(working_time)),
+                  data = binary_gender)
+
+summary(model_single)$coeff
+
+model_nb = MASS::glm.nb(promotion_times ~ gender + team,
+                        offset(log(working_time)), 
+                        data = binary_gender)
+
+model_cross = glm.nb(promotion_times ~ gender + team + gender:team,
+                  offset(log(working_time)),
+                  data = binary_gender)
+
+lmtest::lrtest(model_single,model_nb)
+
+# add the term 'team'
+
+# lmtest::lrtest(model_single,model_nb)
+
+# include both random slope and intercept
+model_random_intercept_slope = glmer.nb(promotion_times ~ gender +
+                                       (1 + gender|team), 
+                                     offset = log(working_time),
+                                     data = binary_gender)
+
+# likelihood ratio test
+# lmtest::lrtest(model_fixed, model_random_intercept)
+# lmtest::lrtest(model_nb, model_random_intercept_slope)
+
+# result: both slope and intercept unnecessary
+
+
+# try adding random effects of team
+model_team_intercept = glmer(promotion_times ~ gender + (1|team),
+                             offset = log(working_time),
+                             family = poisson, 
+                             data = binary_gender)
+
+# lmtest::lrtest(model_fixed, model_team_intercept)
+
+modelx = MASS::glm.nb(promotion_times ~ gender + team+role_seniority, offset(log(working_time)), data = binary_gender)
+# lmtest::lrtest(model_nb,modelx)
+```
+
+### Results
+
+First, let's do some explanatory data analysis to get an intuition of our promotion research question: Is there any existing gender bias against women in career promotion?  
+
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+gender_count = binary_gender %>% 
+  group_by(gender) %>% 
+  tally()
+
+gender_df = data.frame(gender = gender_count$gender, count = gender_count$n)
+knitr::kable(gender_df,caption = 'Number of employees')%>%
+  kable_styling(latex_options = "HOLD_position")
+```
+
+From Table 12, the gender ratio of employees between men and women is about 3:2. There are ~ 100 more male employees and we should take that into account when we think about gender ratios of other variables of interest. To have a further breakdown of promotion regarding different teams,
+
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+
+binary_gender %>% 
+  ggplot(aes(x = promotion_times,y = team,fill=gender))+
+  geom_bar(stat = 'identity')+
+  theme_minimal()+
+  labs(title = 'Figure A: Bar Plot of Promotion Counts',
+       subtitle = 'by team and gender',
+       x = 'Total Sum of Promotion Counts', y = 'Team')
+```
+
+Figure A illustrates the total number of promotion all of the team members have experienced across team. The ratio patterns are quite different across team, which possibly implies different gender bias situations in different teams. 
+
+So we fit the negative binomial GLM model as proposed in the Methods section. The estimation, p-values and bounds for confidence intervals of each variable are summarized in Table 13 (all values except p-values are exponentiated):
+
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+# fit a negative binomial model to fix overdispersion
+model_nb = MASS::glm.nb(promotion_times ~ gender + team, 
+                        offset(log(working_time)), 
+                        data = binary_gender)
+# summary(model_nb)
+# use exponential for Poisson interpretation
+
+# estimates
+ests_nb <- format(round(exp(summary(model_nb)$coeff)[,1], 3), nsmall = 2)
+
+# p-values
+p_val = summary(model_nb)$coeff[,4]
+
+# report 95% confidence interval
+CI = format(round(exp(confint(model_nb)),3), nsmall = 2)
+
+summary_table = data.frame(Estimate = as.numeric(ests_nb),
+                            'p value' = round(p_val,4),
+                            'Lower Bound' = as.numeric(CI[,1]),
+                            'Upper Bound' = as.numeric(CI[,2]))
+
+knitr::kable(summary_table,caption = 'Summary statistics of Negative Binomial Model')%>%
+  kable_styling(latex_options = "HOLD_position")
+```
+
+  In our model with categorical variables, the coefficients can be interpreted as log risk ratios i.e. $\beta_1 = log(\frac{\lambda_{female}}{\lambda_{male}})$, and after exponentiation, $\frac{\lambda_{female}}{\lambda_{male}} = e^{\beta_1}$ denotes the risk ratio i.e. the percent change in the response for a categorical change in X. Note that  gender=0 for male and gender=1 for female, and there is an indicator function for each team. Also notice that the underlying gender is men and the default team is Client services, so the exponential of estimates can be deemed the percentage change in the mean number of promotion times relative to a male employee in the Client services team.
+
+  As for the hypothesis testing, our major variable of interest gender as well as the constant term are statistically significant with at the 0.05 level. The gender estimate($\beta_1 \approx 0.694<1$) implies that female employees are expected to have promotion counts approximately 0.7 times that of male employees on average if she belongs to the Client service team. Equivalently, she encounters a 30% difference in promotion counts fewer than men employees. 
+  
+  Moreover, 4 out of 6 team coefficients also report statistical significance in estimation: Design($p=.005$), Operations($p=.011$), People and talent($p=3.05e^{-7}$) and Software($p=.006$), all of which have higher promotion chances for at least 10%. Such deviations across team confirmed our observations from the Figure A, that is, differences in gender bias in terms of promotion possibilities across team indeed exist in the Black Saber. For example, an female worker may have promotion times $0.694*1.285 \approx 0.892$ times that of male workers in the Software team i.e. a nearly 10% gender gap.
+
+  As for the confidence intervals, our interpretation results are the same as using p-values. Any interval containing $e^0=1$ is an indication of failure to reject the null hypothesis that the corresponding coefficient estimate is zero i.e. no effect on the mean number of promotion counts. The exact interval values are displayed in Table F.
+
+
+
+## Potential Gender Bias in Salary
+
+### Method
+
+  * Study Design
+    + A comprehensive study focusing on finding whether or not there is unfairness, 
+    i.e., bias, in the salary between gender in the Black Saber Software Company.
+  * Setting
+    + This study used the data that contains the employees' salary starting from 
+    the date when he or she was recruited by the company, ending in the fourth 
+    quarter, 2020.
+  * Participants:
+    + A total of 6789 observations with repeated measurements on the same employees
+    who are currently working for the company, with gender only male and female 
+    since the sample size of the employees for Prefer not to say is too small.
+  * Data Sources
+    + The data includes the quarterly salary for each current employee in Black 
+    Saber Company, with their id, gender, team, salary's corresponded financial 
+    quarter, role seniority for each financial quarter, whether or not appropriate 
+    for level in each financial quarter, and productivity scores for each financial 
+    quarter
+    + To analyze the potential bias, i.e., the difference in salary between male 
+    and female while holding other variables fixed, we excluded the gender class 
+    "Prefer not to say". Also, the salary term has been turned into the 
+    numerical form.
+  * Statistical method
+    + From the data set we can see that, for salary variable, we can consider it 
+    as a continuous variable, and since there are repeated measurements for a single 
+    person and within each team, the salary tends to be quite similar, we could 
+    not regard salary as independent, and therefore, we introduced two random 
+    effects into our model, one is employee_id for dependence within the same employee, 
+    and the other is team for dependence within a team. Also, since we were 
+    interested in salary difference between male and female, we would only contain 
+    the gender as our fixed effects. Therefore, we have proposed a linear mixed 
+    model as following: $$Y_{salary,ij} = \beta_0 + \beta_1X_{gender,i} + b_{employee_{id}, i} + b_{team, i} + \epsilon_{ij}$$
+    + For the model assumptions check, we can see that from the residual vs. fitted 
+    values plot, the linearity and constant variance of residuals hold quite good, 
+    and so such a linear mixed model is appropriate for the data set.
+
+### Results
+  * From the Table 14 that presents the mean salary for male and female, we can 
+    tell that there are approximately 3000 dollar difference between male and 
+    female. Therefore, such difference exists in a general way.
+  * Further, we can see from the graph for male and female salary in different 
+    seniority roles that, in each seniority of the role, the salary difference 
+    still exists between male and female. Notice that here we excluded the seniority 
+    for the top three level since the sample sizes for them are too small.
+  * Last, we can see from the model output that, with consideration of random 
+    effects, the salary for female is on average 4854.75 dollar less than male in 
+    Black Saber Software Company approximately, and also, the male's average salary 
+    is around 45016.94 after taken into account for the random effects of repeated 
+    id and similarity within the same team. The results are presented in Table 15.
+  * From the confidence intervals for random and fixed effects, we can see that 
+    the confidence interval for each effect is not too wide to build significance 
+    and there is no 0 in the confidence interval. Therefore, we can say that our 
+    effects are all statistically significant. The confidence intervals are shown 
+    in the Table 16.
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+salary_analysis <- data %>%
+  filter(gender != 'Prefer not to say') 
+```
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+fixed_team <- lmer(salary ~ gender + (1|employee_id) + (1|team), data = salary_analysis)
+fe <- data.frame("Values" = fixef(fixed_team))
+knitr::kable(fe, caption = "Fixed effects coefficients")%>%
+  kable_styling(latex_options = "HOLD_position")
+```
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+knitr::kable(confint(fixed_team), caption = "confidence intervals for effects")%>%
+  kable_styling(latex_options = "HOLD_position")
+```
+
+
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+plot(fixed_team, main = "residual vs. fitted value", xlab = "fitted value", 
+     ylab = "residual value")
+```
+
+
+```{r, echo=FALSE}
+df <- aggregate(salary~gender, data %>% filter(gender!='Prefer not to say'), FUN=mean)
+knitr::kable(df, caption = "mean salary for male and female")%>%
+  kable_styling(latex_options = "HOLD_position")
+```
+
+
+```{r, echo=FALSE}
+data %>% 
+  filter(gender!='Prefer not to say', !role_seniority %in% 
+           c('Director','Manager','Vice president')) %>% 
+  ggplot(aes(x=role_seniority,y=salary,fill=gender))+
+  labs(title = "Salary for male and female in different role") + 
+  geom_boxplot()
+```
+
+
+## Discussion and Conclusion
+
+This technical report has explored the potential gender bias in three different parts in the Black Saber Software Company: hiring, promotion and salary. We have proposed several statistical models to analyze the data provided by the company thoroughly and we have found that, for the hiring process, women applicants who applied for the data team in phase 1 have a lower average promotion rate to the next phase when holding other variables in phase 1 fixed. Besides, there was no evidence that shows a gender bias during the hiring phase. For the promotion process, however, according to our data exploration and model analysis procedures, we found that the gender discrimination against women appears in the Black Saber Company in terms of different degrees of decreases in promotion opportunities for different teams. Female workers are less likely to get promotion in their career, but this phenomenon does not hold for all teams of the company and the gap magnitudes are moderate. Lastly, for the salary process, we have found indeed there is statistically significant 
+difference between male and female in salary among current employees in the Black 
+Saber Software Company, and so there is bias in salary between male and female.
+
+
+  
+
+## Limitations
+
+* Hiring
+  + The last phase in which the appliers are finally considered according to their behaviour in the interview is to be the most biased stage in the hiring process since it is using human-rated information to decide where the final offer goes to. However, the sample is considerably small therefore we must make clear that the conclusion which we get that gender discrimination does not exist may be a coincidence case. In order to improve this situation, we kindly suggest that a larger sample can be provided so a conclusion that is more representative can be generated. Besides, Algorithms for AI grading scheme is not provided thus no conclusions can be generated about whether the grading system is gender-biased.
+
+* Promotion
+  + The linearity assumption is vague in this context since the predictors are categorical variables, not continuous ones. If this assumption does not hold, it is dangerous to use this Negative Binomial model and conclude the existence of the gender bias in the Black Saber. Such misinterpretation would be costly and harmful to the company, especially for its reputation and goodwill.
+
+  + For future consideration, we suggest adding another fixed effect called 'role seniority' to account for the fact that higher initial job position is an indication of fewer chance of promotion. For example, if one joins the company as a director, there is at most 1 possible promotion count for him to achieve i.e. being a vice president. On the other hand, if one gets employed as an entry-level worker, it is possible for him to get promoted 8 times and become a vice president as well.
+
+* Salary
+  + In this analysis, we did not explore the potential bias in the gender 
+"Prefer not to say" due to very small sample size. However, no one in the 
+company should be ignored and so in the future study, we should collect enough 
+data for this gender and to explore whether the company has bias on people with 
+this gender.
+
+  + Also, we did not include seniority of role, leadership for level and productivity 
+in our linear mixed model. Therefore, in the future study, we could include 
+these terms as fixed effects to see the difference in salary in different roles, 
+in different quality of leadership, and in different productivity scores.
+
+
+
+ 
+\newpage
+# Consultant information
+
+## Consultant profiles
+
+**Chen Zhang**. Chen is a senior statistical consultant with Dataable. He specializes in database management and data architecture. Before joining Dataable, he earned his Ph.D. in computer science from Carnegie Mellon University in 2024. 
+
+**Zian Lu**. Zian is a senior consultant with Dataable. He specializes in statistical communication and data visualization. He received his Ph.D in Organizational Behavior and Statistics from Harvard University in 2025. 
+
+**Tongfei Zhou**. Tongfei, FRM is a financial services risk management senior consultant with Dataable. He specializes in risk management and reproducible data analysis. He received his Ph.D. in Operations Management from the Sloan School of Management at the Massachusetts Institute of Technology in 2025. 
+
+**Yichen Ji**. Yichen is a senior data scientist with Dataable. He specializes in statistical inference and mathematical modeling. He earned his Ph.D. from the Industrial Engineering and Operations Research (IEOR) department at Columbia University in 2026. 
+ 
+
+
+
+
+
+## Code of ethical conduct
+
+The Dataable Code of Ethical Conduct is one of the approaches we put the values of 
+Dataable into practice. This code provides guidelines and principles our team members 
+follow in statistical consulting. 
+
+* Business Integrity
+
+Dataable shows zero tolerance towards any misconduct under the code of integrity 
+including data fraud, intentional manipulation of Analysis results, any forms of bribery, 
+and corruption. We strive to record and present the steps and every aspect of the results 
+that is significant under rigorous scientific reasoning. Suppliers shall respect the 
+intellectual property of others.
+
+* Data Privacy and confidentiality
+
+Suppliers shall protect the privacy of our client’s data according to Canadian data 
+protection regulations and acknowledge the potential loss caused by leaking and 
+unauthorized exposure of the data. However, we have also acknowledged the legal 
+limitations on privacy and confidentiality assurances and do exercise further protection 
+where they may not apply.
+
+* Social and Environmental responsibilities
+
+Suppliers shall never use forced labor to lure in school students with internship 
+opportunities to get free or underpaid labor force. We are also acknowledged with our 
+role in the environment and strives to reduce our greenhouse emissions and refuse to 
+collect or analyze the data from animal experiments.
+
