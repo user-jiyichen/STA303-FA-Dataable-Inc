@@ -1,0 +1,266 @@
+---
+title: "Current Employees"
+author: "Dataable"
+date: "09/04/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+rm(list = ls())
+library(dplyr)
+library(tidyverse)
+library(stringr)
+library(lme4)
+library(boot)
+library(MASS)
+```
+
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+# read the dataset of current employees
+raw = read_csv('black-saber-current-employees.csv')
+data = read_csv('black-saber-current-employees.csv') %>% 
+  mutate(salary = as.numeric(gsub('\\$|\\,','',salary)))
+# turn salary column into numeric
+```
+
+# Technical report
+
+### Research questions
+
+* The aim of this analysis is to explore whether there exists any gender bias in job promotion in the Black Saber Company to find any other factors related to promotion. A metric of promotion procedure can be the number of times an employee gets promoted in their career, and the scope of gender bias can be a significant counts gap by gender. If such bias exists, does it differ by which team group one belongs to? We would like to use the data available with a valid model to estimate such gender differences.
+
+## Fewer promotion opportunities for women: an investigation
+
+### Statistical Methods 
+
+  We conducted a retrospective analysis to find if there is any gender bias in promotion in terms of the number of times employees achieve higher role advancement. A total of 607 Black Saber Software current employees identified with unique ID were included, but those who preferred not to report their gender type were excluded for better male/female comparison. The staff data was kindly provided by Mr. Gideon Blake, the chief people officer of the client company. There are 8 teams with 9 different seniority roles, and the performance of employees is evaluated by two aspects, leadership level and work productivity, using a three-level ranking and a 0-100 numerical scale rating, respectively. 
+  
+  Two new measurements called promotion time and working time, were created in terms of the number of financial quarters. The aim of these two variables is to gauge how many times an employee got promoted and how long they have been in this company in their career, separately. Note that both are counts variables, so Poisson-related models are preferred.
+  
+  To compare the differences of the counts of promotion by gender, we decided to estimate a negative binomial generalized linear model, after a long model selection process which is discussed later. The expression of the model is the following:
+$$log(\frac{\lambda}{working\ time}) = \beta_0 + \beta_1(gender)+\beta_2(team) $$which is equivalent to $$log(\lambda) = \beta_0 + \beta_1(gender)+\beta_2(team)+log(working \ time)$$
+where $\lambda$ is the mean count of promotion, $working \ time$ is the total number of financial quarters one has stayed in this company, and other variables have been introduced previously. The negative binomial model can be considered as a Poisson model where $\lambda$ is random and follows a Gamma distribution.
+
+  We took $team$ as a fixed effect due to the fact that every employee always gets promoted within their initial team that hired them and that different team groups are likely to have different promotion schemes.
+
+  The model included an offset term $log(working \ times)$ since different employees may have worked for this company for different years. For example, a vice president has been promoted 6 times over his 10-year career in this company, whereas an entry-level worker hasn't got any promotion just because he is newly employed yesterday! $\frac{\lambda}{working \ time}$denotes the promotion time counts in terms of the rate per financial quarter for each employee, which accounts for the differences in working time.
+  
+#### Data wrangling
+
+Table A is a sample of observations from the initial data:
+
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+options(dplyr.width = Inf)
+knitr::kable(head(raw,n=5L),
+             caption = 'Table A: The first five observations in the initial dataset')
+```
+The steps of data manipulation are as follows:
+
+1. Change the names of each variable to make it clearer for the general audience 
+
+2. Remove employees with gender type being 'Prefer not to say' for better comparison purpose
+
+3. Create two new variables called 'promotion time' and 'working time'
+
+4. Remove 'Q' in the financial quarter column as well as the space in front of 'Q', and make it numeric for ordering purpose. Also remove special signs such as '$', ',' in the salary column and make it numeric.
+
+5. Join the auxiliary tables together, only left with variables of interest for promotion research question.
+
+6. Remove employees with gender type being 'Prefer not to say' for better comparison purpose
+
+Table B is a sample of observations after wrangling:
+
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+## PROMOTION RESEARCH QUESTION
+
+# add a new variable called 'number of promotion'
+promotion_time = data %>% 
+  group_by(employee_id,gender) %>% 
+  summarize(promotion_times = n_distinct(role_seniority)-1)
+
+# add a new variable called 'working time' indicating number of quarters
+# an employee has been in this company
+promotion_time$working_time = count(data,employee_id)$n
+
+# create a new table to include the first quarter each 
+# employee joined this company
+
+# turn the variable 'financial_q' into numeric for ordering
+earlist_enter_time = data %>% 
+  
+  mutate(financial_q = as.numeric(gsub("[^\\d]+", "", financial_q, perl=TRUE))) %>% 
+  group_by(employee_id,gender) %>% 
+  summarise(financial_q = min(financial_q))
+
+delete_Q = data %>% 
+  mutate(financial_q = as.numeric(gsub("[^\\d]+", "", financial_q, perl=TRUE))) %>% 
+  dplyr::select(employee_id,gender,financial_q,role_seniority,team)
+
+# join the helping tables to get all variables of interest
+promotion_time2 = earlist_enter_time %>% 
+  left_join(delete_Q,by = c('financial_q','employee_id','gender')) %>% 
+  left_join(promotion_time,by = c('employee_id','gender'))
+
+# exclude 'Prefer not to say' gender
+binary_gender = promotion_time2 %>% 
+  filter(gender != 'Prefer not to say')
+
+# The first five observations from the dataset after wrangling
+knitr::kable(head(binary_gender,n=5L),
+             caption = 'Table B: The first five observations in the dataset after manipulation')
+```
+
+#### Model assumptions and selection
+
+  Since the negative binomial model is indeed a Poisson model whose parameter $\lambda$ is random, it suffices to check the Poisson model assumptions with an adjustment in the model=variance assumption:
+
+* Poisson Response. The response variable is a count of promotion times per quarter, so it is a valid Poisson response.
+
+* Independence. Work performance and productivity of employees are the main metrics of promotion. Some may argue that promotion chances differ by team, but we will show via Likelihood Ratio Test that such team grouping effects are not statistically significant by a generalized linear mixed model. As a result, it is plausible to assume that promotion counts are independent of each other.
+
+* Linearity. Linearity with respect to $log(\lambda)$ is difficult to discern without continuous predictor variables, thus not the main concern here.
+
+* Mean = Variance. Check if the empirical means and variances of the count of promotion times are approximately equal for the overall data(Table C) as well as for each team(Table D):
+
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+# Poisson model assumption check
+# overall difference between mean and variance
+mean_var = data.frame('overall mean' = round(mean(binary_gender$promotion_times),3),
+'overall variance' = round(var(binary_gender$promotion_times),3))
+knitr::kable(mean_var,caption = 'Table C: Overall mean and variance ')
+
+# compare mean and variance within each team
+team_mean_var = binary_gender %>%
+  group_by(team) %>%
+  summarise('mean' = mean(promotion_times),variance = var(promotion_times))
+  #labs(title ='Comparison of mean and variance of number of promotion within each team group')
+
+knitr::kable(team_mean_var, caption = 'Table D: mean and variance across team')
+```
+We can see from Table D that most of the variances are moderately larger than means and there are different variability among team groups, which is an evidence of the violation against the mean=variance assumption. This is also the purpose/reason why we apply the negative binomial model to deal with over-dispersion.
+
+  In terms of model selection, we first considered a negative binomial model for which $log(\frac{\lambda}{working \ time})$is only linear in gender. Both the gender and constant terms are significantly different from zero, which is an indication of gender difference in promotion counts. Next, we added the 'team' term to account for group difference in promotion and applied the likelihood ratio test for model comparison. The <0.05 p-value indicates that it is statistically significant to add the variable 'team' as a fixed effect.
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+## compare different GLMMs with random effects and the simple GLM above using LRT
+
+# the GLM NB model
+model_single = glm.nb(promotion_times ~ gender,
+                  offset(log(working_time)),
+                  data = binary_gender)
+
+summary(model_single)$coeff
+
+model_nb = MASS::glm.nb(promotion_times ~ gender + team,
+                        offset(log(working_time)), 
+                        data = binary_gender)
+
+model_cross = glm.nb(promotion_times ~ gender + team + gender:team,
+                  offset(log(working_time)),
+                  data = binary_gender)
+
+lmtest::lrtest(model_single,model_nb)
+
+# add the term 'team'
+
+# lmtest::lrtest(model_single,model_nb)
+
+# include both random slope and intercept
+model_random_intercept_slope = glmer.nb(promotion_times ~ gender +
+                                       (1 + gender|team), 
+                                     offset = log(working_time),
+                                     data = binary_gender)
+
+# likelihood ratio test
+# lmtest::lrtest(model_fixed, model_random_intercept)
+# lmtest::lrtest(model_nb, model_random_intercept_slope)
+
+# result: both slope and intercept unnecessary
+
+
+# try adding random effects of team
+model_team_intercept = glmer(promotion_times ~ gender + (1|team),
+                             offset = log(working_time),
+                             family = poisson, 
+                             data = binary_gender)
+
+# lmtest::lrtest(model_fixed, model_team_intercept)
+
+modelx = MASS::glm.nb(promotion_times ~ gender + team+role_seniority, offset(log(working_time)), data = binary_gender)
+# lmtest::lrtest(model_nb,modelx)
+```
+
+### Results
+
+First, let's do some explanatory data analysis to get an intuition of our promotion research question: Is there any existing gender bias against women in career promotion?  
+
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+gender_count = binary_gender %>% 
+  group_by(gender) %>% 
+  tally()
+
+gender_df = data.frame(gender = gender_count$gender, count = gender_count$n)
+knitr::kable(gender_df,caption = 'Table E: number of employees')
+```
+
+From Table E, the gender ratio of employees between men and women is about 3:2. There are ~ 100 more male employees and we should take that into account when we think about gender ratios of other variables of interest. To have a further breakdown of promotion regarding different teams,
+
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+
+binary_gender %>% 
+  ggplot(aes(x = promotion_times,y = team,fill=gender))+
+  geom_bar(stat = 'identity')+
+  theme_minimal()+
+  labs(title = 'Figure A: Bar Plot of Promotion Counts',
+       subtitle = 'by team and gender',
+       x = 'Total Sum of Promotion Counts', y = 'Team')
+```
+
+Figure A illustrates the total number of promotion all of the team members have experienced across team. The ratio patterns are quite different across team, which possibly implies different gender bias situations in different teams. 
+
+So we fit the negative binomial GLM model as proposed in the Methods section. The estimation, p-values and bounds for confidence intervals of each variable are summarized in Table F (all values except p-values are exponentiated):
+
+```{r,include=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+# fit a negative binomial model to fix overdispersion
+model_nb = MASS::glm.nb(promotion_times ~ gender + team, 
+                        offset(log(working_time)), 
+                        data = binary_gender)
+# summary(model_nb)
+# use exponential for Poisson interpretation
+
+# estimates
+ests_nb <- format(round(exp(summary(model_nb)$coeff)[,1], 3), nsmall = 2)
+
+# p-values
+p_val = summary(model_nb)$coeff[,4]
+
+# report 95% confidence interval
+CI = format(round(exp(confint(model_nb)),3), nsmall = 2)
+
+summary_table = data.frame(Estimate = as.numeric(ests_nb),
+                            'p value' = round(p_val,4),
+                            'Lower Bound' = as.numeric(CI[,1]),
+                            'Upper Bound' = as.numeric(CI[,2]))
+
+knitr::kable(summary_table,caption = 'Table F: Summary statistics of Negative Binomial Model')
+```
+
+  In our model with categorical variables, the coefficients can be interpreted as log risk ratios i.e. $\beta_1 = log(\frac{\lambda_{female}}{\lambda_{male}})$, and after exponentiation, $\frac{\lambda_{female}}{\lambda_{male}} = e^{\beta_1}$ denotes the risk ratio i.e. the percent change in the response for a categorical change in X. Note that $gender = 0 \ for \ male \ and\ gender=1 \ for \ female $ and there is an indicator function for each team. Also notice that the underlying gender is men and the default team is Client services, so the exponential of estimates can be deemed the percentage change in the mean number of promotion times relative to a male employee in the Client services team.
+
+  As for the hypothesis testing, our major variable of interest$gender$ as well as the constant term are  statistically significant with at the 0.05 level. The gender estimate($\beta_1 \approx 0.694<1$) implies that female employees are expected to have promotion counts approximately 0.7 times that of male employees on average if she belongs to the Client service team. Equivalently, she encounters a 30% difference in promotion counts fewer than men employees. 
+  
+  Moreover, 4 out of 6 team coefficients also report statistical significance in estimation: Design($p=.005$), Operations($p=.011$), People and talent($p=3.05e^{-7}$) and Software($p=.006$), all of which have higher promotion chances for at least 10%. Such deviations across team confirmed our observations from the Figure A, that is, differences in gender bias in terms of promotion possibilities across team indeed exist in the Black Saber. For example, an female worker may have promotion times $0.694*1.285 \approx 0.892$ times that of male workers in the Software team i.e. a nearly 10% gender gap.
+
+  As for the confidence intervals, our interpretation results are the same as using p-values. Any interval containing $e^0=1$ is an indication of failure to reject the null hypothesis that the corresponding coefficient estimate is zero i.e. no effect on the mean number of promotion counts. The exact interval values are displayed in Table F.
+  
+*Conclusion*  In summary, according to our data exploration and model analysis procedures, we find that the gender discrimination against women appears in the Black Saber Company in terms of different degrees of decreases in promotion opportunities for different teams. Female workers are less likely to get promotion in their career, but this phenomenon does not hold for all teams of the company and the gap magnitudes are moderate.
+
+
+## Limitation Discussion
+
+* The linearity assumption is vague in this context since the predictors are categorical variables, not continuous ones. If this assumption does not hold, it is dangerous to use this Negative Binomial model and conclude the existence of the gender bias in the Black Saber. Such misinterpretation would be costly and harmful to the company, especially for its reputation and goodwill.
+
+* For future consideration, we suggest adding another fixed effect called 'role seniority' to account for the fact that higher initial job position is an indication of fewer chance of promotion. For example, if one joins the company as a director, there is at most 1 possible promotion count for him to achieve i.e. being a vice president. On the other hand, if one gets employed as an entry-level worker, it is possible for him to get promoted 8 times and become a vice president as well.
